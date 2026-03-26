@@ -1,0 +1,8 @@
+*
+!*.py
+!*.txt
+!.gitignore
+!.streamlit/
+!*.toml
+!*.md
+!*.jpg
