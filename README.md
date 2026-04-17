@@ -2,7 +2,7 @@
 
 **科研人的极简液相色谱图绘制工具 (A minimalist HPLC data plotting tool for researchers)**
 
-## 🌐 在线体验（国内访问）
+## 🌐 在线体验（可能需要科学上网）
 
 https://hplc-plot.streamlit.app/
 
