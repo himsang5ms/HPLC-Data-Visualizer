@@ -1,8 +1,13 @@
+# 1. 先忽略所有文件
 *
+
+# 2. 但是！不要忽略 .py 文件（!表示例外）
 !*.py
 !*.txt
+# 3. 也不要忽略 .gitignore 文件本身（这很重要，否则规则自己也被忽略了）
 !.gitignore
 !.streamlit/
 !*.toml
 !*.md
 !*.jpg
+!*.png

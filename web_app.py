@@ -2,13 +2,19 @@ import streamlit as st
 import pandas as pd
 import base64
 import os
+from lang import get_text
 
 # 引入我们刚刚写的极简图表引擎
 from hplc_engine import generate_plot
 
+# 确定语言 (默认为英语)
+if 'lang' not in st.session_state:
+    st.session_state.lang = 'en'
+lang = st.session_state.lang
+
 # 1. 网页基础配置
 st.set_page_config(
-    page_title="HPLC 极简可视化", 
+    page_title=get_text(lang, "page_title"), 
     layout="wide", 
     initial_sidebar_state="expanded"
 )
@@ -44,10 +50,10 @@ st.markdown(
         display: none !important;
     }
 
-    /* 强制缩小侧边栏宽度到 240px，使其永远可见并禁止位移 */
+    /* 强制缩小侧边栏宽度到 280px，使其永远可见并禁止位移 */
     section[data-testid="stSidebar"] {
-        min-width: 240px !important;
-        max-width: 240px !important;
+        min-width: 280px !important;
+        max-width: 280px !important;
         display: block !important; 
         visibility: visible !important;
         transform: none !important; 
@@ -62,57 +68,7 @@ st.markdown(
         max-width: 100% !important;
     }
 
-    /* 美化侧栏横向颜色块，针对 Streamlit >= 1.30 结构优化，强制正方形 */
-    [data-testid="stSidebar"] div[data-testid="stHorizontalBlock"] button {
-        height: 32px !important;
-        width: 32px !important;
-        padding: 0 !important;
-        border-radius: 4px !important;
-        border: 2px solid transparent !important;
-        transition: all 0.2s;
-        min-height: 32px !important;
-        margin: 0 auto;
-        display: block;
-    }
-    [data-testid="stSidebar"] div[data-testid="stHorizontalBlock"] button p {
-        display: none !important; /* 隐藏按钮内置文字 */
-    }
-    [data-testid="stSidebar"] div[data-testid="stHorizontalBlock"] button:focus {
-        border: 2px solid white !important;
-        box-shadow: 0 0 5px white !important;
-        transform: scale(1.1);
-    }
-    
-    /* 强行给前 5 个按钮上色 - 100% 精准命中 stHorizontalBlock 的直接子列 */
-    [data-testid="stSidebar"] div[data-testid="stHorizontalBlock"] > div:nth-child(1) button { background-color: #1f77b4 !important; }
-    [data-testid="stSidebar"] div[data-testid="stHorizontalBlock"] > div:nth-child(2) button { background-color: #0c2c84 !important; }
-    [data-testid="stSidebar"] div[data-testid="stHorizontalBlock"] > div:nth-child(3) button { background-color: #2ca02c !important; }
-    [data-testid="stSidebar"] div[data-testid="stHorizontalBlock"] > div:nth-child(4) button { background-color: #d62728 !important; }
-    [data-testid="stSidebar"] div[data-testid="stHorizontalBlock"] > div:nth-child(5) button { background-color: #9467bd !important; }
 
-    /* 第6个：强制取色器外壳显示为白色正方块 */
-    [data-testid="stSidebar"] div[data-testid="stHorizontalBlock"] > div:nth-child(6) div[data-testid="stColorPicker"] > div > div {
-        background: #FFFFFF !important;
-        height: 32px !important;
-        width: 32px !important;
-        border-radius: 4px !important;
-        border: 1px solid #444 !important;
-        box-shadow: none !important;
-        cursor: pointer !important;
-        margin: 0 auto;
-    }
-    [data-testid="stSidebar"] div[data-testid="stHorizontalBlock"] > div:nth-child(6) div[data-testid="stColorPicker"] > div > div:hover {
-        border: 2px solid white !important;
-        transform: scale(1.1);
-    }
-    /* 隐藏原生的颜色圆圈核心 */
-    [data-testid="stSidebar"] div[data-testid="stHorizontalBlock"] > div:nth-child(6) div[data-testid="stColorBlock"] {
-        opacity: 0 !important;
-        width: 100% !important;
-        height: 100% !important;
-    }
-
-    /* 让取色器底部右侧的hsl/rgb切换小按钮缩小实现持平 */
     div[data-baseweb="popover"] button {
         transform: scale(0.7) !important;
         transform-origin: right bottom;
@@ -136,8 +92,8 @@ st.markdown(
 )
 
 # 2. 显示网页大标题
-st.title("HPLC 极简可视化")
-st.markdown("上传您的 HPLC 数据，将自动渲染交互式折线图。")
+st.title(get_text(lang, "app_title"))
+st.markdown(get_text(lang, "app_subtitle"))
 
 # --- 初始化 Session State ---
 if 'line_width' not in st.session_state:
@@ -157,14 +113,14 @@ def clear_uploaded_files():
 
 # 3. 提供一个多文件上传器，限定只能传 csv 格式
 uploaded_files = st.file_uploader(
-    "请上传一个或多个 HPLC 数据文件 (CSV, CTX)", 
+    get_text(lang, "upload_label"), 
     type=["csv", "ctx"], 
     accept_multiple_files=True,
     key=f"file_uploader_{st.session_state.uploader_key}"
 )
 
 if uploaded_files:
-    st.button("🧹 一键清空所有导入文件", on_click=clear_uploaded_files)
+    st.button(get_text(lang, "clear_files_btn"), on_click=clear_uploaded_files)
 
 data_dict = {}
 recommended_offset = 500.0  # 默认兜底偏移量
@@ -236,7 +192,7 @@ if uploaded_files:
                 st.session_state.file_order.append(f)
 
         # 渲染我们自己的自定义可排序文件列表
-        st.markdown("### 已导入文件")
+        st.markdown(get_text(lang, "imported_files"))
         
         for i, file_name in enumerate(st.session_state.file_order):
             col1, col2, col3, col4, col5 = st.columns([1, 6, 1, 1, 1])
@@ -262,20 +218,110 @@ if uploaded_files:
                     st.rerun()
             with col5:
                 # 单点移除按钮 (完全可控黑名单机制)
-                if st.button("🗑️", key=f"del_{file_name}", help="从本次绘图中移除"):
+                if st.button("🗑️", key=f"del_{file_name}", help=get_text(lang, "remove_file_help")):
                     # 提示：直接将文件加入黑名单，防止其再次被系统尾部追加回来导致变相移动到底部
                     st.session_state.deleted_files.add(file_name)
                     st.session_state.file_order.pop(i)
                     st.rerun()
             
     except Exception as e:
-        st.error(f"解析文件前置发生错误: {e}")
+        st.error(get_text(lang, "parse_error", str(e)))
+
+if data_dict:
+    # 重构传递给画布的字典顺序
+    ordered_data_dict = {f: data_dict[f] for f in reversed(st.session_state.file_order) if f in data_dict}
+    
+    # --- 步骤 2.1: 在生成图表和侧边栏前，提前处理交互事件，消除单次刷新延迟 ---
+    if "marked_peaks" not in st.session_state:
+        st.session_state.marked_peaks = set()
+    if "colored_regions" not in st.session_state:
+        st.session_state.colored_regions = []
+        
+    if "last_selection" not in st.session_state:
+        st.session_state.last_selection = []
+    if "last_box_selection" not in st.session_state:
+        st.session_state.last_box_selection = []
+        
+    # 尝试从 session_state 中获取此图表的选中状态
+    plot_state = st.session_state.get("hplc_plot", {})
+    current_selection = plot_state.get("selection", {}).get("points", [])
+    current_box = plot_state.get("selection", {}).get("box", [])
+    
+    box_changed = current_box != st.session_state.last_box_selection
+    points_changed = current_selection != st.session_state.last_selection
+    
+    # 1. 处理框选事件（染色）
+    if box_changed:
+        if len(current_box) > 0:
+            x_range = current_box[0].get("x", [])
+            if len(x_range) >= 2:
+                x_min, x_max = min(x_range), max(x_range)
+                target_file = "All"
+                if len(current_selection) > 0:
+                    curve_numbers = [pt.get("curve_number") for pt in current_selection if "curve_number" in pt]
+                    if curve_numbers:
+                        most_common_curve = max(set(curve_numbers), key=curve_numbers.count)
+                        ordered_keys = list(ordered_data_dict.keys())
+                        if most_common_curve < len(ordered_keys):
+                            target_file = ordered_keys[most_common_curve]
+                
+                st.session_state.colored_regions.append({
+                    "xmin": x_min,
+                    "xmax": x_max,
+                    "target_file": target_file
+                })
+        
+        st.session_state.last_box_selection = current_box
+        
+    # 2. 处理点击事件（画红线/Toggle）
+    if points_changed:
+        # 只处理有实质选中的情况，忽略选区清空的情况（防止刷新或点击空白处误删标记）
+        if len(current_selection) > 0:
+            # 当且仅当用户只点击了一个点，或者没有框选时处理，避免框选时误触标记
+            if len(current_box) == 0:
+                for pt in current_selection:
+                    if "x" in pt:
+                        x_val = pt["x"]
+                        already_exists = False
+                        for marked_x in st.session_state.marked_peaks:
+                            if abs(marked_x - x_val) < 0.05:
+                                already_exists = True
+                                break
+                        
+                        if not already_exists:
+                            st.session_state.marked_peaks.add(x_val)
+                        else:
+                            to_remove = None
+                            for marked_x in st.session_state.marked_peaks:
+                                if abs(marked_x - x_val) < 0.05:
+                                    to_remove = marked_x
+                                    break
+                            if to_remove is not None:
+                                st.session_state.marked_peaks.remove(to_remove)
+                            
+        st.session_state.last_selection = current_selection
 
 # --- 新增功能：侧边栏样式控制 ---
 with st.sidebar:
-    st.header("🎨 论文排版设置")
+    # 语言选择器放在最上面
+    lang_map = {"zh": "🇨🇳 中文", "en": "🇺🇸 English", "jp": "🇯🇵 日本語"}
+    # 倒推索引
+    lang_options = list(lang_map.keys())
+    current_index = lang_options.index(st.session_state.lang) if st.session_state.lang in lang_options else 1
     
-    st.markdown("##### 1. 选择全局配色包")
+    selected_lang = st.selectbox(
+        get_text(lang, "lang_title"),
+        options=lang_options,
+        index=current_index,
+        format_func=lambda x: lang_map[x]
+    )
+    if selected_lang != st.session_state.lang:
+        st.session_state.lang = selected_lang
+        st.rerun()
+
+    st.header(get_text(lang, "sidebar_header"))
+    
+    st.markdown(get_text(lang, "palette_title"))
     palette_options = [
         "Vibrant (For Screen)", 
         "Pure Black (Single Color)",
@@ -283,32 +329,32 @@ with st.sidebar:
         "Grayscale Cascade"
     ]
     st.selectbox(
-        "自动为多条曲线分配颜色",
+        get_text(lang, "palette_select"),
         options=palette_options,
         key="palette"
     )
         
-    st.markdown("##### 2. Y轴错开堆叠 (Waterfall)")
+    st.markdown(get_text(lang, "y_offset_title"))
     # 默认针对多文件开启堆叠
-    enable_stacking = st.checkbox("启用均匀错开 (防止曲线重叠)", value=True if len(uploaded_files) > 1 else False)
+    enable_stacking = st.checkbox(get_text(lang, "y_offset_check"), value=True if len(uploaded_files) > 1 else False)
     
     y_offset_val = 0.0
     if enable_stacking:
         # 自由输入框，初始化为系统算好的智能偏移量
         y_offset_val = st.number_input(
-            "堆叠间距 (Y-Offset)", 
+            get_text(lang, "y_offset_input"), 
             value=float(recommended_offset), 
             step=float(recommended_offset * 0.1) if recommended_offset > 0 else 100.0
         )
         
-    st.markdown("##### 3. 设置全局线条粗细")
+    st.markdown(get_text(lang, "line_width_title"))
     st.slider(
-        "统一调节线宽", min_value=0.5, max_value=5.0, step=0.1, key="line_width"
+        get_text(lang, "line_width_slider"), min_value=0.5, max_value=5.0, step=0.1, key="line_width"
     )
 
-    st.markdown("##### 4. 辅助显示设置")
-    show_legend = st.checkbox("在图表中显示注释图例", value=True)
-    show_y_axis = st.checkbox("显示 Y 轴及刻度", value=True)
+    st.markdown(get_text(lang, "display_settings_title"))
+    show_legend = st.checkbox(get_text(lang, "show_legend"), value=True)
+    show_y_axis = st.checkbox(get_text(lang, "show_y_axis"), value=True)
     
     # 动态初始化 X 轴滑块范围
     if uploaded_files and global_max_x > global_min_x:
@@ -317,15 +363,64 @@ with st.sidebar:
         default_x_min, default_x_max = 0.0, 30.0
         
     selected_x_range = st.slider(
-        "裁剪/缩放时间轴 (X轴范围)", 
+        get_text(lang, "x_range_slider"), 
         min_value=max(0.0, default_x_min - 5.0), # 给左边界稍微留点余地，但不能小于0
         max_value=default_x_max + 10.0,          # 给右边界留点余地
         value=(default_x_min, default_x_max),
         step=0.5
     )
     
-    
+    st.markdown(get_text(lang, "interaction_title"))
+    if st.button(get_text(lang, "clear_marks_btn")):
+        st.session_state.marked_peaks = set()
+        st.session_state.last_selection = []
+        st.rerun()
 
+    if st.button(get_text(lang, "clear_colors_btn")):
+        st.session_state.colored_regions = []
+        st.session_state.last_box_selection = []
+        st.rerun()
+
+    if "colored_regions" in st.session_state and len(st.session_state.colored_regions) > 0:
+        # 兼容老数据结构，如果里面是元组，转成字典
+        new_regions = []
+        for r in st.session_state.colored_regions:
+            if isinstance(r, tuple):
+                new_regions.append({"xmin": r[0], "xmax": r[1], "target_file": "All"})
+            else:
+                new_regions.append(r)
+        st.session_state.colored_regions = new_regions
+
+        st.markdown("---")
+        st.markdown(get_text(lang, "sidebar_colored_title"))
+        
+        # 确保下拉菜单的选项按当前图表显示顺序排列
+        ordered_files = list(reversed(st.session_state.file_order))
+        options = ["All"] + ordered_files
+        
+        for i, region in enumerate(st.session_state.colored_regions):
+            col_text, col_sel, col_btn = st.columns([1.5, 2.5, 1.2])
+            with col_text:
+                st.markdown(f"<div style='font-size: 0.85rem; font-family: monospace; white-space: nowrap; line-height: 38px;'>{region['xmin']:.2f}-{region['xmax']:.2f}</div>", unsafe_allow_html=True)
+            with col_sel:
+                current_target = region["target_file"]
+                if current_target not in options:
+                    current_target = "All"
+                    
+                new_target = st.selectbox(
+                    "Target File", 
+                    options=options, 
+                    index=options.index(current_target), 
+                    key=f"color_target_{i}", 
+                    label_visibility="collapsed"
+                )
+                if new_target != region["target_file"]:
+                    st.session_state.colored_regions[i]["target_file"] = new_target
+                    st.rerun()
+            with col_btn:
+                if st.button(get_text(lang, "delete_btn"), key=f"del_color_{i}"):
+                    st.session_state.colored_regions.pop(i)
+                    st.rerun()
 
 # 5. 开始绘制图表
 if data_dict:
@@ -333,15 +428,15 @@ if data_dict:
         # 提取字典里第一个 key 对应的 DataFrame
         first_key = list(data_dict.keys())[0] if data_dict else None
         if first_key:
-            with st.expander(f"查看 {first_key} 原始数据"):
+            with st.expander(get_text(lang, "view_raw_data", first_key)):
                 st.dataframe(data_dict[first_key].head())
         
         # 步骤 2: 生成引擎需要按照我们自己维护的顺序传递字典
         # 重构传递给画布的字典顺序
         # 核心改动：由于图表堆叠是按索引 index 从 0 算起（即第一条线在最底下，最后一条线 Y 偏移量最大在最顶上）
-        # 而我们的列表是从上到下看的（index=0在最上面），所以为了保持视觉所见即所得，这里传给图表引擎前要反转顺序！
-        ordered_data_dict = {f: data_dict[f] for f in reversed(st.session_state.file_order) if f in data_dict}
-        
+        # 步骤 2.2: 获取当前更新后的所有着色区域
+        colored_regions = st.session_state.get("colored_regions", [])
+
         fig = generate_plot(
             data_dict=ordered_data_dict, 
             palette_name=st.session_state.palette,
@@ -349,14 +444,36 @@ if data_dict:
             y_offset=float(y_offset_val),
             x_range=selected_x_range,
             show_legend=show_legend,
-            show_y_axis=show_y_axis
+            show_y_axis=show_y_axis,
+            x_title=get_text(lang, "axis_time"),
+            y_title=get_text(lang, "axis_intensity"),
+            colored_regions=colored_regions
         )
+        
+        # 为每个被记录的保留时间画线
+        for x_val in st.session_state.marked_peaks:
+            fig.add_vline(x=x_val, line_width=1.5, line_dash="dash", line_color="rgba(255,0,0,0.7)")
+            fig.add_annotation(
+                x=x_val, 
+                y=1.02, # 显示在顶部，防止遮挡曲线
+                yref="paper",
+                text=f"{x_val:.3f} min",
+                showarrow=False,
+                font=dict(color="red", size=12),
+                bgcolor="rgba(255, 255, 255, 0.9)",
+                bordercolor="red",
+                borderwidth=1,
+                borderpad=3
+            )
         
         # 步骤 3: 用 st.plotly_chart() 把图表显示在网页上，设为自适应宽度
         # 并在此处加上针对 Plotly 交互栏的极简配置
         st.plotly_chart(
             fig, 
             width="stretch",
+            on_select="rerun",          # 开启点击重新运行功能
+            selection_mode=["points", "box"], # 核心修改：允许点选(画红线)和框选(染色)
+            key="hplc_plot",            # 分配唯一的 key，用于捕捉点击状态
             config={
                 'scrollZoom': True,  # 开启：鼠标滚轮缩放功能
                 'displaylogo': False, # 隐藏 Plotly 右侧的注册商标 Logo，更极简
@@ -366,12 +483,12 @@ if data_dict:
                     'legendText': False,          # 禁止修改图例文字内容
                     'titleText': False,           # 禁止修改标题内容
                     'annotationPosition': False,  # 禁止拖动其它注释
-                    'annotationText': False       # 禁止修改其它注释内容
+                    'annotationText': False,      # 禁止修改其它注释内容
+                    'shapePosition': False        # 禁止拖动辅助线（因为后端无法同步拖动状态）
                 },
                 'modeBarButtons': [
-                    # 第一个分组：只保留 框选放大(zoom2d)、平移(pan2d)、恢复默认坐标轴(resetScale2d)
-                    # 按照用户习惯，把 resetAxes 按钮放在 pan2d 的右边
-                    ['zoom2d', 'pan2d', 'resetScale2d'],
+                    # 第一个分组：只保留 框选放大(zoom2d)、平移(pan2d)、框选(select2d)、恢复默认坐标轴(resetScale2d)
+                    ['zoom2d', 'pan2d', 'select2d', 'resetScale2d'],
                     # 第二个分组：只保留 导出图片 按钮
                     ['toImage']
                 ],
@@ -385,20 +502,26 @@ if data_dict:
 
     except Exception as e:
         # 此处抓取任何解析或画图过程中可能的报错，避免直接网页红屏瘫痪
-        st.error(f"处理文件时发生错误: {e}")
+        st.error(get_text(lang, "plot_error", str(e)))
 
 # 在页面最底部压入页脚版权信息
 st.markdown(
-    """
+    f"""
     <div style='text-align: center; margin-top: 50px; padding-bottom: 20px; color: #888; font-size: 0.85rem;'>
-        Made by 想准点下班的小J
+        {get_text(lang, "footer_made_by")}
     </div>
     """,
     unsafe_allow_html=True
 )
 
-# 在网页最右下角悬浮显示打赏二维码 (如果有的话)
-reward_path = "reward.jpg"
+# 在网页最右下角悬浮显示打赏二维码 (根据语言动态切换)
+if lang == 'zh':
+    reward_path = "reward.jpg"
+    mime_type = "image/jpeg"
+else:
+    reward_path = "bmc_qr.png"
+    mime_type = "image/png"
+
 if os.path.exists(reward_path):
     with open(reward_path, "rb") as f:
         encoded_img = base64.b64encode(f.read()).decode()
@@ -409,9 +532,9 @@ if os.path.exists(reward_path):
                     background: rgba(255, 255, 255, 0.9); padding: 8px; border-radius: 8px; 
                     box-shadow: 0 4px 12px rgba(0,0,0,0.15); text-align: center;">
             <p style="margin: 0 0 5px 0; font-size: 0.8rem; color: #666; font-weight: bold;">
-                👍 觉得好用？
+                {get_text(lang, "footer_support")}
             </p>
-            <img src="data:image/jpeg;base64,{encoded_img}" width="100" style="border-radius: 4px;">
+            <img src="data:{mime_type};base64,{encoded_img}" width="100" style="border-radius: 4px;">
         </div>
         """,
         unsafe_allow_html=True

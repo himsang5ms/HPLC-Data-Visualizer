@@ -17,7 +17,10 @@ def generate_plot(
     y_offset: float = 0.0,
     x_range: tuple = None,
     show_legend: bool = True,
-    show_y_axis: bool = True
+    show_y_axis: bool = True,
+    x_title: str = "Time (min)",
+    y_title: str = "Intensity",
+    colored_regions: list = None
 ) -> go.Figure:
     """
     核心图表引擎：支持多文件、自动配色和瀑布流堆叠(Y-offset)。
@@ -55,25 +58,80 @@ def generate_plot(
         y_data = clean_y + (idx * float(y_offset))
         
         # 从调色板取色
-        current_color = next(color_cycle)
+        current_color = colors[idx % len(colors)]
         
-        # 添加此条曲线到画布
-        fig.add_trace(go.Scatter(
+        # 添加此条曲线到画布 (重新启用 WebGL 硬件加速，解决几十万数据点的渲染卡顿)
+        fig.add_trace(go.Scattergl(
             x=df[x_col], 
             y=y_data,
-            mode='lines',
+            mode='lines+markers',
+            marker=dict(size=6, opacity=0),  # 透明的散点，用于捕获用户的点击事件
             line=dict(color=current_color, width=line_width),
             name=filename  # 图例显示文件名
         ))
 
+    # === 新增：遍历并绘制框选的染色区域 ===
+    # 1. 优先绘制“应用到所有”的全局垂直色带 (场景A: 对比有无)
+    for region in colored_regions:
+        target_file = "All" if isinstance(region, tuple) else region.get("target_file", "All")
+        if target_file == "All":
+            x_min = region[0] if isinstance(region, tuple) else region["xmin"]
+            x_max = region[1] if isinstance(region, tuple) else region["xmax"]
+            fig.add_vrect(
+                x0=x_min, x1=x_max,
+                fillcolor="rgba(169, 169, 169, 0.2)", # 更淡的灰色，防止遮挡
+                layer="below",
+                line_width=0,
+            )
+            
+    # 2. 接着绘制应用到“特定单根曲线”的面积积分染色 (场景B: 强调目标产物)
+    for idx, (filename, df) in enumerate(data_dict.items()):
+        x_col = 'min' if 'min' in df.columns else df.columns[0]
+        y_col = 'Intensity' if 'Intensity' in df.columns else df.columns[1]
+        
+        for region in colored_regions:
+            # 兼容老版本元组结构
+            if isinstance(region, tuple):
+                continue # All 已经在上面画过了
+            
+            x_min = region["xmin"]
+            x_max = region["xmax"]
+            target_file = region["target_file"]
+                
+            # 只处理指定给当前曲线的染色
+            if target_file != filename:
+                continue
+
+            mask = (df[x_col] >= x_min) & (df[x_col] <= x_max)
+            df_slice = df[mask]
+            if not df_slice.empty:
+                x_filled = df_slice[x_col].tolist()
+                y_filled = (pd.to_numeric(df_slice[y_col], errors='coerce').fillna(0) + (idx * float(y_offset))).tolist()
+                
+                # 构建闭合的多边形：沿着曲线走，然后垂直落回基线，再沿着基线回起点，闭合
+                x_poly = x_filled + [x_filled[-1], x_filled[0], x_filled[0]]
+                y_poly = y_filled + [(idx * float(y_offset)), (idx * float(y_offset)), y_filled[0]]
+                
+                fig.add_trace(go.Scatter(
+                    x=x_poly,
+                    y=y_poly,
+                    fill='toself',
+                    fillcolor='rgba(169, 169, 169, 0.4)',  # 稍微深一点的半透明灰色
+                    line=dict(color='rgba(255,255,255,0)'), # 透明边框
+                    hoverinfo='skip',
+                    showlegend=False
+                ))
+
     # 3. 优化图表样式，保持极简白底风格，符合顶刊要求
     fig.update_layout(
         template="plotly_white",        # 纯白极简主题
-        xaxis_title="Time (min)",       # X轴中文提示
-        yaxis_title="Intensity",        # Y轴中文提示
+        xaxis_title=x_title,            # X轴多语言提示
+        yaxis_title=y_title,            # Y轴多语言提示
         hovermode="x unified",          # 显示统一的悬浮数据框，方便精确看数据点
         margin=dict(l=20, r=20, t=30, b=20), # 减少四周留白
         dragmode="pan",                 # 默认启用平移模式
+        clickmode="event+select",       # 确保点击能被当做 select 事件捕捉
+        uirevision=True,                # 核心机制：保持用户的缩放和平移状态，不会因为加了线而重置图表
         showlegend=show_legend,         # 控制图例显示与否
         legend=dict(
             orientation="v", yanchor="top", y=1, xanchor="right", x=0.99,

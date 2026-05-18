@@ -1,51 +1,54 @@
 # HPLC-Data-Visualizer 🚀
 
-**科研人的极简液相色谱图绘制工具 (A minimalist HPLC data plotting tool for researchers)**
+**A minimalist HPLC data plotting tool for researchers**
 
-## 🌐 在线体验（可能需要科学上网）
+[🇨🇳 简体中文 (Read in Chinese)](README_ZH.md)
+
+## 🌐 Online Demo (Global Access)
 
 https://hplc-plot.streamlit.app/
 
-## 💡 为什么做这个？
+## 💡 Why was this built?
 
-作为一个天天被异源表达和化合物合成折磨的科研打工人，我受够了每次跑完 HPLC 都要打开极其臃肿的 Origin，经历“建图层 -> 导数据 -> 调坐标轴 -> 软件崩溃卡死”的地狱循环。
-为了能准点下班，我趁周末手搓了这个极简的 Web 工具。主打一个目的：**把机械的体力活交给代码，把时间留给科研（或者睡觉）。**
+As a researcher tortured daily by heterologous expression and compound synthesis, I was fed up with opening the incredibly bloated Origin software every time I ran an HPLC. The hellish cycle of "create layers -> import data -> tweak axes -> software crashes" was unbearable.
+To get off work on time, I hand-coded this minimalist Web tool over the weekend. The main goal: **leave the mechanical manual labor to code, and save your time for actual research (or sleeping).**
 
-## ✨ 核心功能
+## ✨ Core Features
 
-- **🚀 傻瓜式批量操作：** 拒绝繁琐的导入步骤，直接把多个 `.txt` 或 `.csv` 原始数据拖进网页，自动提取。
-- **📊 一键堆叠对齐：** 瞬间生成排版整齐的多条色谱堆叠图（Stacked Plots），坐标轴自动对齐。
-- **🎨 顶级期刊审美：** 砍掉没用的菜单，只保留最核心的调参功能，一键导出高清矢量图（支持导出，告别马赛克）。
+- **🚀 Idiot-proof Batch Operations:** Reject tedious import steps. Just drag and drop multiple raw data files (supports Shimadzu `.txt`, Hitachi `.ctx`, generic `.csv`, etc.) directly into the webpage for automatic parsing.
+- **📊 Waterfall Stacking & Custom Sorting:** Instantly generate neatly aligned multi-chromatogram waterfall stacked plots. Rearrange layer order effortlessly by dragging and dropping in the sidebar.
+- **🖱️ Interactive Peak Integration (New!):** Click the "Box Select" icon in the top-right toolbar of the chart, then simply drag across a target peak to instantly shade its integration area. Manage and delete colored regions in real-time via the sidebar.
+- **📍 Precise Peak Marking:** "Single click" anywhere on a curve to automatically mark the exact Retention Time with a vertical dashed red line down to a thousandth of a minute. Click again to toggle off.
+- **🎨 Publication-Grade Aesthetics:** Built-in 4 scientific color palettes (including colorblind-safe). Minimalist UI control panel stripping away useless menus. One-click export to pure, high-definition SVG vector graphics that never pixelate.
+- **🌍 Multi-language Support:** Natively supports 🇨🇳 Chinese, 🇺🇸 English, and 🇯🇵 Japanese interfaces with instant, seamless switching.
 
-## 🛠️ 如何在本地跑起来？
+## 🛠️ How to run locally?
 
-如果你电脑里装了 Python 环境，只需要两步：
+If you have a Python environment, it only takes two steps:
 
-1. 安装依赖包：
-
+1. Install dependencies:
 ```bash
 pip install -r requirements.txt
 ```
 
-1. 运行程序：
-
+2. Run the app:
 ```bash
 streamlit run web_app.py
 ```
 
-浏览器会自动跳出一个网页，直接把你的数据拖进去就能用了。
+A browser window will automatically pop up. Just drag your data in and you're good to go.
 
-## ⚠️ 开发者碎碎念
+## ⚠️ Developer Notes
 
-本人主业是搞科研的（还得去盯实验），不是专业程序员。代码难免有 Bug，目前兼容的数据格式也不是很多。
+My main job is doing research (and babysitting experiments), not a professional programmer. Bugs are inevitable, and data format compatibility is currently limited.
 
-- 懂 Python 的兄弟们欢迎提 PR 一起优化。
-- 不懂代码的同学如果跑不通，可以提 Issue 或者在知乎找我留言，人多的话我后续抽空研究下怎么打个免安装的包。
+- Brothers who know Python are extremely welcome to submit PRs to optimize it together.
+- For users who don't know how to code, if you can't get it running, feel free to leave an Issue. If there's enough demand, I'll look into packaging a no-install executable later.
 
-祝大家早日脱离苦海，顺利发 Paper！
+Wish everyone a speedy escape from the lab and smooth Paper publications!
 
-## ☕ 支持一下
+## ☕ Support
 
-如果这个小工具帮你省下了跟 Origin 死磕的时间，让你能早点下班，欢迎扫码请苦逼的异源表达打工人喝杯牛奶护护胃，或者赞助一顿爆辣火锅！(也欢迎在 Issues 里提 Bug)
+If this little tool saved you from fighting with Origin and helped you get off work earlier, feel free to scan the QR code to buy this miserable heterologous expression worker a coffee to protect his stomach, or sponsor a spicy hotpot! (Also welcome to report bugs in Issues)
 
-![赞赏码](reward.jpg)
+![Buy Me a Coffee](bmc_qr.png)
