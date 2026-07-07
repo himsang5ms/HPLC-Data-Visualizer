@@ -1,56 +1,121 @@
-# HPLC-Data-Visualizer 🚀
+<p align="center">
+  <a href="README.md">English</a> &middot;
+  <a href="https://hplc-data-visualizer.streamlit.app/">在线 Demo</a> &middot;
+  <a href="https://github.com/himsang5ms/HPLC-Data-Visualizer/releases/latest">Windows 版下载</a> &middot;
+  <a href="CASE_STUDY.md">Case Study</a> &middot;
+  <a href="#截图">截图</a> &middot;
+  <a href="#源码运行">源码运行</a>
+</p>
 
-**科研人的极简液相色谱图绘制工具 (A minimalist HPLC data plotting tool for researchers)**
+<h1 align="center">HPLC Data Visualizer</h1>
 
-[🇺🇸 English (Read in English)](README.md)
+<p align="center">
+  面向实验室汇报和科研讨论的浏览器端 HPLC 色谱图快速绘图工具。
+</p>
 
-## 🌐 在线体验（可能需要科学上网）
+<p align="center">
+  <img alt="Python" src="https://img.shields.io/badge/Python-3.x-blue">
+  <img alt="Streamlit" src="https://img.shields.io/badge/Streamlit-app-ff4b4b">
+  <img alt="Plotly" src="https://img.shields.io/badge/Plotly-visualization-3f4f75">
+  <img alt="License" src="https://img.shields.io/badge/License-MIT-yellow">
+</p>
 
-https://hplc-plot.streamlit.app/
+## 项目简介
 
-## 💡 为什么做这个？
+HPLC Data Visualizer 是一个面向药学、天然产物及相关实验室场景的 HPLC 色谱图绘制工具。它把原本需要在 Origin 等桌面软件里反复完成的导入数据、调整坐标轴、修改线条样式和导出图片等步骤，集中到了一个浏览器界面里，帮助你快速查看 HPLC 色谱图、比较多个样品，并输出风格统一、适合组会和科研讨论的图片。
 
-作为一个天天被异源表达和化合物合成折磨的科研打工人，我受够了每次跑完 HPLC 都要打开极其臃肿的 Origin，经历“建图层 -> 导数据 -> 调坐标轴 -> 软件崩溃卡死”的地狱循环。
-为了能准点下班，我趁周末手搓了这个极简的 Web 工具。主打一个目的：**把机械的体力活交给代码，把时间留给科研（或者睡觉）。**
+## 核心功能
 
-## ✨ 核心功能
+- 在浏览器中上传多个 HPLC 数据文件并绘制色谱图。
+- 提供 Windows x64 便携版，无需另行安装 Python。
+- 当前支持通用 `.csv` 文件和日立 `.ctx` 文件。
+- 可以直接加载内置示例数据。
+- 可以下载示例 CSV 压缩包，用于测试上传流程。
+- 支持多样品瀑布图堆叠，方便进行样品间比较。
+- 支持在侧边栏调整样品显示顺序。
+- 支持切换内置配色模板，适配不同展示场景。
+- 支持调整线宽、堆叠间距、X 轴显示范围和样品名字号。
+- 支持将样品名显示在每条曲线的左侧或右侧。
+- 支持隐藏图例和 Y 轴，让汇报图更简洁。
+- 支持点击曲线标记保留时间。
+- 支持框选峰区域并进行高亮显示。
+- 支持通过显眼按钮或 Plotly 工具栏导出 SVG 矢量图。
+- 支持中日英界面切换。
 
-- **🚀 傻瓜式批量操作：** 拒绝繁琐的导入步骤，直接将多个原始数据（支持岛津 .txt, 日立 .ctx, 通用 .csv 等）拖进网页，自动解析提取。
-- **📊 瀑布流堆叠与自定义排序：** 瞬间生成排版整齐的多条色谱堆叠图（Waterfall Stacked Plots）。支持在侧边栏随意拖拽上下移动调整图层顺序。
-- **🖱️ 交互式峰面积积分（全新功能）：** 点击图表右上角工具栏的“框选 (Box Select)”小图标，直接在图表上拖拽框选目标峰，瞬间完成峰底积分区域着色。侧边栏同步生成管理列表，一键清除。
-- **📍 精准寻峰标记：** 鼠标在图表上“单点”点击，自动标记保留时间（Retention Time）虚线，精确到千分之一分钟。支持再次点击取消标记。
-- **🎨 顶级期刊审美：** 内置 4 套科研配色方案（包含色盲友好色板）。极简 UI 控制面板，砍掉没用的菜单。提供一键导出纯净高清 SVG 矢量图，告别马赛克。
-- **🌍 国际化多语言支持：** 原生内置 🇨🇳 中文、🇺🇸 英文、🇯🇵 日语界面，随时一键无缝切换。
+## Demo
 
-## 🛠️ 如何在本地跑起来？
+在线 Demo：
 
-如果你电脑里装了 Python 环境，只需要两步：
+https://hplc-data-visualizer.streamlit.app/
 
-1. 安装依赖包：
+## Windows 便携版
+
+最新的 Windows x64 便携版可前往 [GitHub Releases](https://github.com/himsang5ms/HPLC-Data-Visualizer/releases/latest) 下载。
+
+下载后完整解压 ZIP，双击 `HPLC Data Visualizer.exe` 即可运行，无需另行安装 Python。
+
+## 截图
+
+SVG 导出示例：
+
+![Example HPLC chromatogram export](assets/example-export.svg)
+
+## 使用流程
+
+1. 打开在线 Demo 或 Windows 便携版。
+2. 上传一个或多个 HPLC 数据文件，或直接加载内置示例数据。
+3. 在侧边栏调整堆叠、配色、线宽、样品名、坐标轴和显示范围。
+4. 根据需要标记保留时间或高亮峰区域。
+5. 导出 SVG 图，用于汇报、组会或报告材料。
+
+## 使用情况
+
+该项目已在我所在的研究实验室中被频繁使用，且由该工具生成的图已经用于组会和科研汇报。
+
+目前得到的反馈都比较积极，主要集中在几个实际价值上：减少重复排版、节省绘图时间，以及让多样品 HPLC 色谱图更容易整理和比较。
+
+更详细的项目背景、产品决策和开发过程见英文 [Case Study](CASE_STUDY.md)。
+
+## 技术栈
+
+- Python
+- Streamlit
+- pandas
+- Plotly
+- PyInstaller（Windows 便携版打包）
+- CSV / CTX 数据解析
+- 浏览器端 SVG 导出
+
+## Roadmap
+
+计划或可能的后续改进：
+
+- 支持更多仪器厂商的 HPLC 导出格式。
+- 增强数据校验和解析错误提示。
+- 改进峰面积积分流程和峰信息导出。
+- 支持保存项目或会话，方便重复整理。
+- 探索面向课题组或小型实验室的产品化版本。
+
+## 源码运行
+
+安装依赖：
 
 ```bash
 pip install -r requirements.txt
 ```
 
-1. 运行程序：
+运行应用：
 
 ```bash
 streamlit run web_app.py
 ```
 
-浏览器会自动跳出一个网页，直接把你的数据拖进去就能用了。
+然后打开终端中显示的本地 Streamlit 地址。
 
-## ⚠️ 开发者碎碎念
+## License
 
-本人主业是搞科研的（还得去盯实验），不是专业程序员。代码难免有 Bug，目前兼容的数据格式也不是很多。
+MIT License
 
-- 懂 Python 的兄弟们欢迎提 PR 一起优化。
-- 不懂代码的同学如果跑不通，可以提 Issue 或者在知乎找我留言，人多的话我后续抽空研究下怎么打个免安装的包。
+## Contact
 
-祝大家早日脱离苦海，顺利发 Paper！
-
-## ☕ 支持一下
-
-如果这个小工具帮你省下了跟 Origin 死磕的时间，让你能早点下班，欢迎扫码请苦逼的异源表达打工人喝杯牛奶护护胃，或者赞助一顿爆辣火锅！(也欢迎在 Issues 里提 Bug)
-
-![赞赏码](reward.jpg)
+如有问题、bug 或建议，请使用 GitHub Issues。

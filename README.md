@@ -1,54 +1,123 @@
-# HPLC-Data-Visualizer 🚀
+<p align="center">
+  <a href="README_ZH.md">Chinese</a> &middot;
+  <a href="https://hplc-data-visualizer.streamlit.app/">Online Demo</a> &middot;
+  <a href="https://github.com/himsang5ms/HPLC-Data-Visualizer/releases/latest">Windows Download</a> &middot;
+  <a href="CASE_STUDY.md">Case Study</a> &middot;
+  <a href="#screenshots">Screenshots</a> &middot;
+  <a href="#development-setup">Development Setup</a>
+</p>
 
-**A minimalist HPLC data plotting tool for researchers**
+<h1 align="center">HPLC Data Visualizer</h1>
 
-[🇨🇳 简体中文 (Read in Chinese)](README_ZH.md)
+<p align="center">
+  Browser-based HPLC chromatogram visualization for faster, cleaner lab presentation figures.
+</p>
 
-## 🌐 Online Demo (Global Access)
+<p align="center">
+  <img alt="Python" src="https://img.shields.io/badge/Python-3.x-blue">
+  <img alt="Streamlit" src="https://img.shields.io/badge/Streamlit-app-ff4b4b">
+  <img alt="Plotly" src="https://img.shields.io/badge/Plotly-visualization-3f4f75">
+  <img alt="License" src="https://img.shields.io/badge/License-MIT-yellow">
+</p>
 
-https://hplc-plot.streamlit.app/
+## Overview
 
-## 💡 Why was this built?
+HPLC Data Visualizer helps pharmaceutical sciences and natural products researchers turn raw HPLC chromatogram data into presentation-ready figures with less manual formatting. Instead of repeatedly importing data into Origin or similar desktop tools, users can upload files in a browser, compare samples, adjust figure styling, and export SVG figures.
 
-As a researcher tortured daily by heterologous expression and compound synthesis, I was fed up with opening the incredibly bloated Origin software every time I ran an HPLC. The hellish cycle of "create layers -> import data -> tweak axes -> software crashes" was unbearable.
-To get off work on time, I hand-coded this minimalist Web tool over the weekend. The main goal: **leave the mechanical manual labor to code, and save your time for actual research (or sleeping).**
+The app is designed for a focused lab workflow: fast chromatogram visualization, multi-sample comparison, and consistent figure preparation for meetings and research discussions.
 
-## ✨ Core Features
+## Key Features
 
-- **🚀 Idiot-proof Batch Operations:** Reject tedious import steps. Just drag and drop multiple raw data files (supports Shimadzu `.txt`, Hitachi `.ctx`, generic `.csv`, etc.) directly into the webpage for automatic parsing.
-- **📊 Waterfall Stacking & Custom Sorting:** Instantly generate neatly aligned multi-chromatogram waterfall stacked plots. Rearrange layer order effortlessly by dragging and dropping in the sidebar.
-- **🖱️ Interactive Peak Integration (New!):** Click the "Box Select" icon in the top-right toolbar of the chart, then simply drag across a target peak to instantly shade its integration area. Manage and delete colored regions in real-time via the sidebar.
-- **📍 Precise Peak Marking:** "Single click" anywhere on a curve to automatically mark the exact Retention Time with a vertical dashed red line down to a thousandth of a minute. Click again to toggle off.
-- **🎨 Publication-Grade Aesthetics:** Built-in 4 scientific color palettes (including colorblind-safe). Minimalist UI control panel stripping away useless menus. One-click export to pure, high-definition SVG vector graphics that never pixelate.
-- **🌍 Multi-language Support:** Natively supports 🇨🇳 Chinese, 🇺🇸 English, and 🇯🇵 Japanese interfaces with instant, seamless switching.
+- Upload multiple HPLC data files and render chromatograms in the browser.
+- Run locally on Windows from a portable package without installing Python.
+- Currently supports generic `.csv` files and Hitachi `.ctx` files.
+- Load built-in example chromatograms directly from the web interface.
+- Download example CSV files as a ZIP for testing the upload workflow.
+- Generate stacked waterfall plots for multi-sample comparison.
+- Reorder sample display order from the sidebar.
+- Switch between built-in color palettes for different presentation styles.
+- Adjust line width, stacking distance, visible X-axis range, and sample-label font size.
+- Show sample names directly at the left or right edge of each curve.
+- Toggle legend and Y-axis display for cleaner presentation figures.
+- Mark retention times by clicking on chromatogram curves.
+- Highlight selected peak regions with box selection.
+- Export presentation-ready SVG figures through a visible download button or the Plotly toolbar.
+- Switch between Chinese, English, and Japanese interfaces.
 
-## 🛠️ How to run locally?
+## Demo
 
-If you have a Python environment, it only takes two steps:
+Online demo:
 
-1. Install dependencies:
+https://hplc-data-visualizer.streamlit.app/
+
+## Windows Portable Version
+
+The latest Windows x64 portable version is available from [GitHub Releases](https://github.com/himsang5ms/HPLC-Data-Visualizer/releases/latest).
+
+Download and fully extract the ZIP archive, then double-click `HPLC Data Visualizer.exe`. A separate Python installation is not required.
+
+## Screenshots
+
+Example SVG export:
+
+![Example HPLC chromatogram export](assets/example-export.svg)
+
+## Usage
+
+1. Open the online demo or Windows portable app.
+2. Upload one or more HPLC data files, or load the built-in example data.
+3. Adjust stacking, color palette, line width, sample labels, axes, and visible range from the sidebar.
+4. Optionally mark retention times or highlight peak regions.
+5. Export the final chart as an SVG figure for presentations or reports.
+
+## Adoption
+
+This project has been used by members of my pharmaceutical sciences / natural products research lab. Figures generated by the app have been used in group meetings and research presentations.
+
+User feedback has focused on practical workflow improvements, especially saving time, reducing repetitive formatting, and making multi-sample chromatogram comparisons easier to prepare.
+
+More details are available in the [case study](CASE_STUDY.md).
+
+## Tech Stack
+
+- Python
+- Streamlit
+- pandas
+- Plotly
+- PyInstaller for Windows portable packaging
+- CSV / CTX data parsing
+- Browser-based SVG export
+
+## Roadmap
+
+Planned or potential improvements:
+
+- Support additional vendor-specific HPLC export formats.
+- Add more robust data validation and parsing error messages.
+- Improve peak integration workflows and exportable peak metadata.
+- Add project/session saving for repeated figure preparation.
+- Explore a more productized version for research groups or small labs.
+
+## Development Setup
+
+Install dependencies:
+
 ```bash
 pip install -r requirements.txt
 ```
 
-2. Run the app:
+Run the app:
+
 ```bash
 streamlit run web_app.py
 ```
 
-A browser window will automatically pop up. Just drag your data in and you're good to go.
+Then open the local Streamlit URL shown in the terminal.
 
-## ⚠️ Developer Notes
+## License
 
-My main job is doing research (and babysitting experiments), not a professional programmer. Bugs are inevitable, and data format compatibility is currently limited.
+MIT License
 
-- Brothers who know Python are extremely welcome to submit PRs to optimize it together.
-- For users who don't know how to code, if you can't get it running, feel free to leave an Issue. If there's enough demand, I'll look into packaging a no-install executable later.
+## Contact
 
-Wish everyone a speedy escape from the lab and smooth Paper publications!
-
-## ☕ Support
-
-If this little tool saved you from fighting with Origin and helped you get off work earlier, feel free to scan the QR code to buy this miserable heterologous expression worker a coffee to protect his stomach, or sponsor a spicy hotpot! (Also welcome to report bugs in Issues)
-
-![Buy Me a Coffee](bmc_qr.png)
+For questions, bugs, or suggestions, please use GitHub Issues.

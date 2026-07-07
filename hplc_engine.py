@@ -20,7 +20,9 @@ def generate_plot(
     show_y_axis: bool = True,
     x_title: str = "Time (min)",
     y_title: str = "Intensity",
-    colored_regions: list = None
+    colored_regions: list = None,
+    sample_label_position: str = "none",
+    sample_label_font_size: int = 18
 ) -> go.Figure:
     """
     核心图表引擎：支持多文件、自动配色和瀑布流堆叠(Y-offset)。
@@ -35,6 +37,7 @@ def generate_plot(
         fig: 渲染好的 plotly 图表对象。
     """
     fig = go.Figure()
+    colored_regions = colored_regions or []
     
     # 获取选中的配色板，并使用 cycle 以防文件数超分配色数
     colors = PALETTES.get(palette_name, PALETTES["Vibrant (For Screen)"])
@@ -69,6 +72,29 @@ def generate_plot(
             line=dict(color=current_color, width=line_width),
             name=filename  # 图例显示文件名
         ))
+
+        if sample_label_position in ("left", "right"):
+            x_numeric = pd.to_numeric(df[x_col], errors='coerce')
+            label_points = pd.DataFrame({"x": x_numeric, "y": y_data}).dropna()
+
+            if x_range is not None:
+                x_min, x_max = min(x_range), max(x_range)
+                label_points = label_points[(label_points["x"] >= x_min) & (label_points["x"] <= x_max)]
+
+            if not label_points.empty:
+                label_point = label_points.sort_values("x").iloc[0 if sample_label_position == "left" else -1]
+                fig.add_annotation(
+                    x=-0.01 if sample_label_position == "left" else 1.01,
+                    xref="paper",
+                    y=label_point["y"],
+                    yref="y",
+                    text=filename,
+                    showarrow=False,
+                    font=dict(color=current_color, size=sample_label_font_size),
+                    bgcolor="rgba(255,255,255,0)",
+                    xanchor="right" if sample_label_position == "left" else "left",
+                    yanchor="middle"
+                )
 
     # === 新增：遍历并绘制框选的染色区域 ===
     # 1. 优先绘制“应用到所有”的全局垂直色带 (场景A: 对比有无)
@@ -128,7 +154,12 @@ def generate_plot(
         xaxis_title=x_title,            # X轴多语言提示
         yaxis_title=y_title,            # Y轴多语言提示
         hovermode="x unified",          # 显示统一的悬浮数据框，方便精确看数据点
-        margin=dict(l=20, r=20, t=30, b=20), # 减少四周留白
+        margin=dict(
+            l=160 if sample_label_position == "left" else 20,
+            r=160 if sample_label_position == "right" else 20,
+            t=30,
+            b=20
+        ), # 样品名显示在图外侧时，为文字预留边距
         dragmode="pan",                 # 默认启用平移模式
         clickmode="event+select",       # 确保点击能被当做 select 事件捕捉
         uirevision=True,                # 核心机制：保持用户的缩放和平移状态，不会因为加了线而重置图表

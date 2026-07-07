@@ -4,6 +4,7 @@
 # 2. 但是！不要忽略 .py 文件（!表示例外）
 !*.py
 !*.txt
+!*.spec
 # 3. 也不要忽略 .gitignore 文件本身（这很重要，否则规则自己也被忽略了）
 !.gitignore
 !.streamlit/
@@ -11,3 +12,10 @@
 !*.md
 !*.jpg
 !*.png
+!*.svg
+!assets/
+!assets/*.svg
+!examples/
+!examples/*.csv
+!scripts/
+!scripts/*.ps1

@@ -1,7 +1,11 @@
 import streamlit as st
+import streamlit.components.v1 as components
 import pandas as pd
 import base64
 import os
+import io
+import zipfile
+from pathlib import Path
 from lang import get_text
 
 # 引入我们刚刚写的极简图表引擎
@@ -96,6 +100,9 @@ st.title(get_text(lang, "app_title"))
 st.markdown(get_text(lang, "app_subtitle"))
 
 # --- 初始化 Session State ---
+APP_DIR = Path(__file__).resolve().parent
+EXAMPLE_DIR = APP_DIR / "examples"
+
 if 'line_width' not in st.session_state:
     st.session_state.line_width = 1.1
 if 'palette' not in st.session_state:
@@ -106,10 +113,91 @@ if 'file_order' not in st.session_state:
     st.session_state.file_order = []
 if 'deleted_files' not in st.session_state:
     st.session_state.deleted_files = set()
+if 'use_example_data' not in st.session_state:
+    st.session_state.use_example_data = False
 
 def clear_uploaded_files():
     st.session_state.uploader_key += 1
     st.session_state.deleted_files = set()
+    st.session_state.file_order = []
+    st.session_state.use_example_data = False
+
+def load_example_data():
+    st.session_state.uploader_key += 1
+    st.session_state.deleted_files = set()
+    st.session_state.file_order = []
+    st.session_state.use_example_data = True
+
+def get_example_file_paths():
+    if not EXAMPLE_DIR.exists():
+        return []
+    return sorted(EXAMPLE_DIR.glob("*.csv"))
+
+def build_example_zip(example_files):
+    buffer = io.BytesIO()
+    with zipfile.ZipFile(buffer, "w", zipfile.ZIP_DEFLATED) as zip_file:
+        for file_path in example_files:
+            zip_file.write(file_path, arcname=file_path.name)
+    buffer.seek(0)
+    return buffer.getvalue()
+
+def render_svg_export_button(label: str):
+    components.html(
+        f"""
+        <button id="hplc-svg-export-btn" style="
+            width: 100%;
+            border: 1px solid #bbb;
+            border-radius: 6px;
+            background: #fff;
+            color: #111;
+            font-size: 16px;
+            font-weight: 700;
+            padding: 0.7rem 1rem;
+            cursor: pointer;
+        ">{label}</button>
+        <div id="hplc-svg-export-status" style="
+            color: #777;
+            font-size: 12px;
+            height: 18px;
+            margin-top: 4px;
+        "></div>
+        <script>
+        const button = document.getElementById("hplc-svg-export-btn");
+        const status = document.getElementById("hplc-svg-export-status");
+
+        button.addEventListener("click", () => {{
+            const parentWindow = window.parent;
+            const parentDocument = parentWindow.document;
+            const plots = parentDocument.querySelectorAll(".js-plotly-plot");
+            const plot = plots[plots.length - 1];
+
+            if (!plot) {{
+                status.textContent = "Plot is not ready yet.";
+                return;
+            }}
+
+            if (parentWindow.Plotly && parentWindow.Plotly.downloadImage) {{
+                parentWindow.Plotly.downloadImage(plot, {{
+                    format: "svg",
+                    filename: "HPLC_Plot_Export",
+                    scale: 1
+                }});
+                status.textContent = "";
+                return;
+            }}
+
+            const downloadButton = plot.querySelector("a[data-title*='Download'], a[data-title*='download']");
+            if (downloadButton) {{
+                downloadButton.click();
+                status.textContent = "";
+            }} else {{
+                status.textContent = "Use the camera icon in the chart toolbar.";
+            }}
+        }});
+        </script>
+        """,
+        height=70
+    )
 
 # 3. 提供一个多文件上传器，限定只能传 csv 格式
 uploaded_files = st.file_uploader(
@@ -120,30 +208,57 @@ uploaded_files = st.file_uploader(
 )
 
 if uploaded_files:
+    st.session_state.use_example_data = False
+
+example_files = get_example_file_paths()
+if example_files:
+    st.markdown(get_text(lang, "example_data_title"))
+    example_col1, example_col2 = st.columns(2)
+    with example_col1:
+        st.button(
+            get_text(lang, "load_examples_btn"),
+            on_click=load_example_data,
+            use_container_width=True
+        )
+    with example_col2:
+        st.download_button(
+            get_text(lang, "download_examples_btn"),
+            data=build_example_zip(example_files),
+            file_name="hplc_example_data.zip",
+            mime="application/zip",
+            use_container_width=True
+        )
+
+using_examples = st.session_state.use_example_data and bool(example_files)
+
+if uploaded_files or using_examples:
     st.button(get_text(lang, "clear_files_btn"), on_click=clear_uploaded_files)
 
 data_dict = {}
 recommended_offset = 500.0  # 默认兜底偏移量
 
 # 4. 如果有文件上传，先解析数据并计算智能偏移量
-if uploaded_files:
+if uploaded_files or using_examples:
     try:
         global_min = float('inf')
         global_max = float('-inf')
         global_min_x = float('inf')
         global_max_x = float('-inf')
         
-        for file in uploaded_files:
-            file_name_clean = file.name[:-4] if file.name.lower().endswith(('.csv', '.ctx')) else file.name
+        files_to_parse = example_files if using_examples else uploaded_files
+        
+        for file in files_to_parse:
+            file_name = file.name
+            file_name_clean = file_name[:-4] if file_name.lower().endswith(('.csv', '.ctx')) else file_name
             
             # 如果文件在用户手动删除的黑名单内，则直接跳过，防止再次进入堆叠序列
             if file_name_clean in st.session_state.deleted_files:
                 continue
 
-            if file.name.lower().endswith('.csv'):
+            if file_name.lower().endswith('.csv'):
                 df = pd.read_csv(file)
                 y_col = 'Intensity' if 'Intensity' in df.columns else df.columns[1]
-            elif file.name.lower().endswith('.ctx'):
+            elif file_name.lower().endswith('.ctx'):
                 content = file.getvalue().decode("utf-8")
                 lines = content.splitlines()
                 data_lines = []
@@ -336,7 +451,7 @@ with st.sidebar:
         
     st.markdown(get_text(lang, "y_offset_title"))
     # 默认针对多文件开启堆叠
-    enable_stacking = st.checkbox(get_text(lang, "y_offset_check"), value=True if len(uploaded_files) > 1 else False)
+    enable_stacking = st.checkbox(get_text(lang, "y_offset_check"), value=True if len(data_dict) > 1 else False)
     
     y_offset_val = 0.0
     if enable_stacking:
@@ -353,11 +468,25 @@ with st.sidebar:
     )
 
     st.markdown(get_text(lang, "display_settings_title"))
-    show_legend = st.checkbox(get_text(lang, "show_legend"), value=True)
-    show_y_axis = st.checkbox(get_text(lang, "show_y_axis"), value=True)
+    show_legend = st.checkbox(get_text(lang, "show_legend"), value=False)
+    show_y_axis = st.checkbox(get_text(lang, "show_y_axis"), value=False)
+    sample_label_options = ["none", "left", "right"]
+    sample_label_position = st.selectbox(
+        get_text(lang, "sample_label_position"),
+        options=sample_label_options,
+        index=2,
+        format_func=lambda option: get_text(lang, f"sample_label_{option}")
+    )
+    sample_label_font_size = st.slider(
+        get_text(lang, "sample_label_font_size"),
+        min_value=10,
+        max_value=32,
+        value=18,
+        step=1
+    )
     
     # 动态初始化 X 轴滑块范围
-    if uploaded_files and global_max_x > global_min_x:
+    if data_dict and global_max_x > global_min_x:
         default_x_min, default_x_max = float(global_min_x), float(global_max_x)
     else:
         default_x_min, default_x_max = 0.0, 30.0
@@ -447,7 +576,9 @@ if data_dict:
             show_y_axis=show_y_axis,
             x_title=get_text(lang, "axis_time"),
             y_title=get_text(lang, "axis_intensity"),
-            colored_regions=colored_regions
+            colored_regions=colored_regions,
+            sample_label_position=sample_label_position,
+            sample_label_font_size=sample_label_font_size
         )
         
         # 为每个被记录的保留时间画线
@@ -466,6 +597,8 @@ if data_dict:
                 borderpad=3
             )
         
+        render_svg_export_button(get_text(lang, "download_svg_btn"))
+
         # 步骤 3: 用 st.plotly_chart() 把图表显示在网页上，设为自适应宽度
         # 并在此处加上针对 Plotly 交互栏的极简配置
         st.plotly_chart(
@@ -516,10 +649,10 @@ st.markdown(
 
 # 在网页最右下角悬浮显示打赏二维码 (根据语言动态切换)
 if lang == 'zh':
-    reward_path = "reward.jpg"
+    reward_path = APP_DIR / "reward.jpg"
     mime_type = "image/jpeg"
 else:
-    reward_path = "bmc_qr.png"
+    reward_path = APP_DIR / "bmc_qr.png"
     mime_type = "image/png"
 
 if os.path.exists(reward_path):
