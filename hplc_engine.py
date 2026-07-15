@@ -1,6 +1,8 @@
 import pandas as pd
 import plotly.graph_objects as go
 import itertools
+import math
+import unicodedata
 
 # --- 预设的顶刊/高级配色方案 ---
 PALETTES = {
@@ -9,6 +11,28 @@ PALETTES = {
     "Grayscale Cascade": ["#111111", "#444444", "#777777", "#AAAAAA", "#DDDDDD"],
     "Vibrant (For Screen)": ["#1f77b4", "#ff7f0e", "#2ca02c", "#d62728", "#9467bd", "#8c564b", "#e377c2"]
 }
+
+
+def estimate_sample_label_margin(
+    data_dict: dict,
+    sample_label_position: str,
+    sample_label_font_size: int
+) -> int:
+    """Estimate the side margin needed to keep full sample names inside exports."""
+    if sample_label_position not in ("left", "right") or not data_dict:
+        return 20
+
+    def character_width_units(text: str) -> float:
+        return sum(
+            1.0 if unicodedata.east_asian_width(char) in ("W", "F") else 0.62
+            for char in str(text)
+        )
+
+    longest_name_width = max(
+        character_width_units(filename) * sample_label_font_size
+        for filename in data_dict
+    )
+    return max(160, math.ceil(longest_name_width + 36))
 
 def generate_plot(
     data_dict: dict, 
@@ -84,7 +108,7 @@ def generate_plot(
             if not label_points.empty:
                 label_point = label_points.sort_values("x").iloc[0 if sample_label_position == "left" else -1]
                 fig.add_annotation(
-                    x=-0.01 if sample_label_position == "left" else 1.01,
+                    x=0 if sample_label_position == "left" else 1,
                     xref="paper",
                     y=label_point["y"],
                     yref="y",
@@ -93,7 +117,8 @@ def generate_plot(
                     font=dict(color=current_color, size=sample_label_font_size),
                     bgcolor="rgba(255,255,255,0)",
                     xanchor="right" if sample_label_position == "left" else "left",
-                    yanchor="middle"
+                    yanchor="middle",
+                    xshift=-12 if sample_label_position == "left" else 12
                 )
 
     # === 新增：遍历并绘制框选的染色区域 ===
@@ -149,14 +174,20 @@ def generate_plot(
                 ))
 
     # 3. 优化图表样式，保持极简白底风格，符合顶刊要求
+    sample_label_margin = estimate_sample_label_margin(
+        data_dict,
+        sample_label_position,
+        sample_label_font_size
+    )
+
     fig.update_layout(
         template="plotly_white",        # 纯白极简主题
         xaxis_title=x_title,            # X轴多语言提示
         yaxis_title=y_title,            # Y轴多语言提示
         hovermode="x unified",          # 显示统一的悬浮数据框，方便精确看数据点
         margin=dict(
-            l=160 if sample_label_position == "left" else 20,
-            r=160 if sample_label_position == "right" else 20,
+            l=sample_label_margin if sample_label_position == "left" else 20,
+            r=sample_label_margin if sample_label_position == "right" else 20,
             t=30,
             b=20
         ), # 样品名显示在图外侧时，为文字预留边距

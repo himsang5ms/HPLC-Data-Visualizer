@@ -9,7 +9,7 @@ from pathlib import Path
 from lang import get_text
 
 # 引入我们刚刚写的极简图表引擎
-from hplc_engine import generate_plot
+from hplc_engine import estimate_sample_label_margin, generate_plot
 
 # 确定语言 (默认为英语)
 if 'lang' not in st.session_state:
@@ -141,7 +141,29 @@ def build_example_zip(example_files):
     buffer.seek(0)
     return buffer.getvalue()
 
-def render_svg_export_button(label: str):
+def calculate_auto_plot_width(x_range) -> int:
+    """Keep short timelines compact while capping long plots at a useful size."""
+    x_span = max(0.0, float(max(x_range) - min(x_range)))
+    return max(650, min(1400, round(500 + (45 * x_span))))
+
+
+def calculate_minimum_plot_width(
+    data_dict,
+    sample_label_position: str,
+    sample_label_font_size: int
+) -> int:
+    """Reserve enough room for labels plus a usable chromatogram area."""
+    label_margin = estimate_sample_label_margin(
+        data_dict,
+        sample_label_position,
+        sample_label_font_size
+    )
+    required_width = 420 + 20 + label_margin
+    return max(500, int(((required_width + 49) // 50) * 50))
+
+
+def render_svg_export_button(label: str, export_width: int = None):
+    export_width_option = f",\n                    width: {export_width}" if export_width else ""
     components.html(
         f"""
         <button id="hplc-svg-export-btn" style="
@@ -180,7 +202,7 @@ def render_svg_export_button(label: str):
                 parentWindow.Plotly.downloadImage(plot, {{
                     format: "svg",
                     filename: "HPLC_Plot_Export",
-                    scale: 1
+                    scale: 1{export_width_option}
                 }});
                 status.textContent = "";
                 return;
@@ -235,6 +257,7 @@ if uploaded_files or using_examples:
     st.button(get_text(lang, "clear_files_btn"), on_click=clear_uploaded_files)
 
 data_dict = {}
+ordered_data_dict = {}
 recommended_offset = 500.0  # 默认兜底偏移量
 
 # 4. 如果有文件上传，先解析数据并计算智能偏移量
@@ -498,6 +521,33 @@ with st.sidebar:
         value=(default_x_min, default_x_max),
         step=0.5
     )
+
+    plot_width_options = ["auto", "stretch", "custom"]
+    plot_width_mode = st.selectbox(
+        get_text(lang, "plot_width_mode"),
+        options=plot_width_options,
+        format_func=lambda option: get_text(lang, f"plot_width_{option}")
+    )
+    minimum_plot_width = calculate_minimum_plot_width(
+        ordered_data_dict,
+        sample_label_position,
+        sample_label_font_size
+    )
+    if plot_width_mode == "auto":
+        plot_width = max(
+            calculate_auto_plot_width(selected_x_range),
+            minimum_plot_width
+        )
+    elif plot_width_mode == "custom":
+        plot_width = st.slider(
+            get_text(lang, "plot_width_custom_value"),
+            min_value=minimum_plot_width,
+            max_value=max(1800, minimum_plot_width + 50),
+            value=max(900, minimum_plot_width),
+            step=50
+        )
+    else:
+        plot_width = "stretch"
     
     st.markdown(get_text(lang, "interaction_title"))
     if st.button(get_text(lang, "clear_marks_btn")):
@@ -597,13 +647,22 @@ if data_dict:
                 borderpad=3
             )
         
-        render_svg_export_button(get_text(lang, "download_svg_btn"))
+        export_width = plot_width if isinstance(plot_width, int) else None
+        render_svg_export_button(get_text(lang, "download_svg_btn"), export_width)
+
+        to_image_options = {
+            'format': 'svg',
+            'filename': 'HPLC_Plot_Export',
+            'scale': 1
+        }
+        if export_width:
+            to_image_options['width'] = export_width
 
         # 步骤 3: 用 st.plotly_chart() 把图表显示在网页上，设为自适应宽度
         # 并在此处加上针对 Plotly 交互栏的极简配置
         st.plotly_chart(
             fig, 
-            width="stretch",
+            width=plot_width,
             on_select="rerun",          # 开启点击重新运行功能
             selection_mode=["points", "box"], # 核心修改：允许点选(画红线)和框选(染色)
             key="hplc_plot",            # 分配唯一的 key，用于捕捉点击状态
@@ -625,11 +684,7 @@ if data_dict:
                     # 第二个分组：只保留 导出图片 按钮
                     ['toImage']
                 ],
-                'toImageButtonOptions': {
-                    'format': 'svg',   # 核心改动：导出矢量图(svg)，无限放大不失真，等同于科研常用的 PDF 质量，且不带网页边框
-                    'filename': 'HPLC_Plot_Export',
-                    'scale': 1         # 导出比例
-                }
+                'toImageButtonOptions': to_image_options
             }
         )
 

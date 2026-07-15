@@ -36,7 +36,8 @@ The app is designed for a focused lab workflow: fast chromatogram visualization,
 - Generate stacked waterfall plots for multi-sample comparison.
 - Reorder sample display order from the sidebar.
 - Switch between built-in color palettes for different presentation styles.
-- Adjust line width, stacking distance, visible X-axis range, and sample-label font size.
+- Adjust line width, stacking distance, visible X-axis range, sample-label font size, and figure width.
+- Size figures automatically from the selected time range, fill the page width, or choose a custom width.
 - Show sample names directly at the left or right edge of each curve.
 - Toggle legend and Y-axis display for cleaner presentation figures.
 - Mark retention times by clicking on chromatogram curves.
@@ -66,7 +67,7 @@ Example SVG export:
 
 1. Open the online demo or Windows portable app.
 2. Upload one or more HPLC data files, or load the built-in example data.
-3. Adjust stacking, color palette, line width, sample labels, axes, and visible range from the sidebar.
+3. Adjust stacking, color palette, line width, sample labels, axes, visible range, and figure width from the sidebar.
 4. Optionally mark retention times or highlight peak regions.
 5. Export the final chart as an SVG figure for presentations or reports.
 
