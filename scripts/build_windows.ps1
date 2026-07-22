@@ -1,5 +1,5 @@
 param(
-    [string]$Version = "1.2.1"
+    [string]$Version = "1.3.0"
 )
 
 $ErrorActionPreference = "Stop"
@@ -20,6 +20,13 @@ try {
     if ($LASTEXITCODE -ne 0) {
         throw "PyInstaller build failed with exit code $LASTEXITCODE"
     }
+
+    $QuickGuideZh = Join-Path $RepoRoot "output\pdf\HPLC-Data-Visualizer-v$Version-Quick-Guide-ZH.pdf"
+    $QuickGuideEn = Join-Path $RepoRoot "output\pdf\HPLC-Data-Visualizer-v$Version-Quick-Guide-EN.pdf"
+    Copy-Item -LiteralPath (Join-Path $RepoRoot "README.md") -Destination $BundleDir -Force
+    Copy-Item -LiteralPath (Join-Path $RepoRoot "README_ZH.md") -Destination $BundleDir -Force
+    Copy-Item -LiteralPath $QuickGuideZh -Destination $BundleDir -Force
+    Copy-Item -LiteralPath $QuickGuideEn -Destination $BundleDir -Force
 
     if (Test-Path $ZipPath) {
         Remove-Item -LiteralPath $ZipPath -Force

@@ -13,7 +13,7 @@ from pathlib import Path
 APP_NAME = "HPLC Data Visualizer"
 MB_OK = 0x00000000
 MB_ICONERROR = 0x00000010
-MB_ICONINFORMATION = 0x00000040
+BROWSER_CLOSE_GRACE_SECONDS = 10
 
 
 def bundle_dir() -> Path:
@@ -73,6 +73,32 @@ def write_error_log() -> None:
     log_path().write_text(traceback.format_exc(), encoding="utf-8")
 
 
+def exit_after_browser_closes() -> None:
+    """Stop the portable app after its last browser session has closed."""
+    from streamlit.runtime import Runtime, RuntimeState
+
+    browser_connected = False
+    disconnected_at = None
+
+    while True:
+        try:
+            runtime_state = Runtime.instance().state
+        except RuntimeError:
+            time.sleep(0.5)
+            continue
+
+        if runtime_state == RuntimeState.ONE_OR_MORE_SESSIONS_CONNECTED:
+            browser_connected = True
+            disconnected_at = None
+        elif browser_connected and runtime_state == RuntimeState.NO_SESSIONS_CONNECTED:
+            if disconnected_at is None:
+                disconnected_at = time.monotonic()
+            elif time.monotonic() - disconnected_at >= BROWSER_CLOSE_GRACE_SECONDS:
+                os._exit(0)
+
+        time.sleep(0.5)
+
+
 def browser_controller(url: str) -> None:
     if not wait_until_ready(url):
         show_message(
@@ -82,16 +108,11 @@ def browser_controller(url: str) -> None:
         os._exit(1)
 
     webbrowser.open(url, new=2)
-    show_message(
-        "The app is running locally in your browser.\n\n"
-        "Keep this message open while using the app.\n"
-        "Click OK when you are finished to stop it.",
-        MB_ICONINFORMATION,
-    )
-    os._exit(0)
+    exit_after_browser_closes()
 
 
 def run_launcher() -> None:
+    os.environ["HPLC_PORTABLE_MODE"] = "1"
     port = find_available_port()
     url = f"http://127.0.0.1:{port}"
     threading.Thread(target=browser_controller, args=(url,), daemon=True).start()

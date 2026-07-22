@@ -2,14 +2,18 @@ import streamlit as st
 import streamlit.components.v1 as components
 import pandas as pd
 import base64
+import hashlib
 import os
 import io
+import threading
+import time
 import zipfile
 from pathlib import Path
+from streamlit_sortables import sort_items
 from lang import get_text
 
 # 引入我们刚刚写的极简图表引擎
-from hplc_engine import estimate_sample_label_margin, generate_plot
+from hplc_engine import estimate_sample_label_margin, generate_plot, parse_csv_signals
 
 # 确定语言 (默认为英语)
 if 'lang' not in st.session_state:
@@ -115,18 +119,34 @@ if 'deleted_files' not in st.session_state:
     st.session_state.deleted_files = set()
 if 'use_example_data' not in st.session_state:
     st.session_state.use_example_data = False
+if 'curve_renames' not in st.session_state:
+    st.session_state.curve_renames = {}
 
 def clear_uploaded_files():
     st.session_state.uploader_key += 1
     st.session_state.deleted_files = set()
     st.session_state.file_order = []
     st.session_state.use_example_data = False
+    st.session_state.curve_renames = {}
+    st.session_state.pop("confirmed_multi_signal_signature", None)
+    st.session_state.pop("selected_multi_signal_ids", None)
 
 def load_example_data():
     st.session_state.uploader_key += 1
     st.session_state.deleted_files = set()
     st.session_state.file_order = []
     st.session_state.use_example_data = True
+    st.session_state.curve_renames = {}
+    st.session_state.pop("confirmed_multi_signal_signature", None)
+    st.session_state.pop("selected_multi_signal_ids", None)
+
+
+def schedule_portable_exit() -> None:
+    def delayed_exit():
+        time.sleep(0.8)
+        os._exit(0)
+
+    threading.Thread(target=delayed_exit, daemon=True).start()
 
 def get_example_file_paths():
     if not EXAMPLE_DIR.exists():
@@ -140,6 +160,190 @@ def build_example_zip(example_files):
             zip_file.write(file_path, arcname=file_path.name)
     buffer.seek(0)
     return buffer.getvalue()
+
+
+def parse_ctx_signal(source, include_diagnostics: bool = False):
+    raw = source.getvalue() if hasattr(source, "getvalue") else Path(source).read_bytes()
+    content = None
+    detected_encoding = "utf-8"
+    for encoding in ("utf-8-sig", "utf-16", "gb18030"):
+        try:
+            content = raw.decode(encoding)
+            detected_encoding = encoding
+            break
+        except (UnicodeDecodeError, UnicodeError):
+            continue
+    if content is None:
+        content = raw.decode("utf-8", errors="replace")
+
+    lines = content.splitlines()
+    section_marker = "[Chromatogram Data]"
+    has_section_marker = any(line.strip() == section_marker for line in lines)
+    inside_data_section = not has_section_marker
+    data_lines = []
+    candidate_rows = 0
+
+    for line in lines:
+        stripped = line.strip()
+        if stripped == section_marker:
+            inside_data_section = True
+            continue
+        if not inside_data_section or not stripped:
+            continue
+
+        parts = stripped.split(';')
+        if len(parts) < 2:
+            continue
+        candidate_rows += 1
+        try:
+            data_lines.append([float(parts[0].strip()), float(parts[1].strip())])
+        except ValueError:
+            continue
+
+    if not data_lines:
+        raise ValueError(get_text(lang, "ctx_no_numeric_data"))
+    data = pd.DataFrame(data_lines, columns=['min', 'Intensity'])
+    diagnostics = {
+        "encoding": detected_encoding,
+        "delimiter": ";",
+        "skipped_rows": max(0, candidate_rows - len(data_lines)),
+    }
+    return (data, diagnostics) if include_diagnostics else data
+
+
+def infer_signal_kind(y_header: str) -> str:
+    normalized = str(y_header).strip().lower()
+    if "count" in normalized:
+        return "ms"
+    if "intensity" in normalized:
+        return "uv"
+    return "unknown"
+
+
+def infer_signal_hint(y_header: str) -> str:
+    return {
+        "uv": "signal_uv_hint",
+        "ms": "signal_ms_hint",
+        "unknown": "signal_unknown_hint",
+    }[infer_signal_kind(y_header)]
+
+
+def multi_signal_signature(entries) -> str:
+    source = "|".join(
+        f"{entry['entry_id']}:{len(entry['data'])}"
+        for entry in entries
+    )
+    return hashlib.sha1(source.encode("utf-8")).hexdigest()[:12]
+
+
+@st.dialog(
+    get_text(lang, "signal_dialog_title"),
+    width="large",
+    dismissible=False,
+)
+def render_signal_selection_dialog(entries, signature: str):
+    st.markdown(get_text(lang, "signal_dialog_intro", len({entry["file_name"] for entry in entries})))
+    detected_kinds = {entry["kind"] for entry in entries if entry["kind"] in {"uv", "ms"}}
+    if len(detected_kinds) > 1:
+        st.info(get_text(lang, "signal_mixed_recommendation"))
+
+    def checkbox_key(entry):
+        entry_digest = hashlib.sha1(entry["entry_id"].encode("utf-8")).hexdigest()[:10]
+        return f"signal_choice_{signature}_{entry_digest}"
+
+    for entry in entries:
+        key = checkbox_key(entry)
+        if key not in st.session_state:
+            st.session_state[key] = True
+
+    def confirm_selection(selected_ids):
+        selected_id_set = set(selected_ids)
+        kind_order = {"uv": 0, "ms": 1, "unknown": 2}
+        selected_curve_order = [
+            entry["curve_name"]
+            for entry in sorted(
+                (entry for entry in entries if entry["entry_id"] in selected_id_set),
+                key=lambda entry: (
+                    kind_order[entry["kind"]],
+                    entry["file_index"],
+                    entry["signal_index"],
+                ),
+            )
+        ]
+        multi_curve_names = {entry["curve_name"] for entry in entries}
+        normal_curve_order = [
+            name
+            for name in st.session_state.file_order
+            if name not in multi_curve_names
+        ]
+        st.session_state.file_order = normal_curve_order + selected_curve_order
+        st.session_state.selected_multi_signal_ids = list(selected_id_set)
+        st.session_state.confirmed_multi_signal_signature = signature
+        for entry in entries:
+            if entry["entry_id"] in selected_id_set:
+                st.session_state.deleted_files.discard(entry["curve_name"])
+        st.rerun()
+
+    all_col, uv_col, ms_col = st.columns(3)
+    presets = (
+        (all_col, "signal_select_all", lambda entry: True),
+        (uv_col, "signal_select_uv", lambda entry: entry["kind"] == "uv"),
+        (ms_col, "signal_select_ms", lambda entry: entry["kind"] == "ms"),
+    )
+    for column, label_key, predicate in presets:
+        with column:
+            if st.button(
+                get_text(lang, label_key),
+                key=f"{label_key}_{signature}",
+                use_container_width=True,
+            ):
+                for entry in entries:
+                    st.session_state[checkbox_key(entry)] = predicate(entry)
+                st.rerun()
+
+    for file_name in dict.fromkeys(entry["file_name"] for entry in entries):
+        st.markdown(f"**{file_name}**")
+        for entry in (item for item in entries if item["file_name"] == file_name):
+            st.checkbox(
+                f"{entry['y_header']} — {get_text(lang, infer_signal_hint(entry['y_header']))}",
+                key=checkbox_key(entry),
+            )
+
+    if st.button(
+        get_text(lang, "signal_confirm_import"),
+        type="primary",
+        use_container_width=True,
+        key=f"confirm_signals_{signature}",
+    ):
+        selected_ids = [
+            entry["entry_id"]
+            for entry in entries
+            if st.session_state[checkbox_key(entry)]
+        ]
+        confirm_selection(selected_ids)
+
+
+def signal_diagnostic_row(entry: dict) -> dict:
+    data = entry["data"]
+    clean_x = pd.to_numeric(data["min"], errors="coerce").dropna()
+    duplicate_times = int(clean_x.duplicated().sum())
+    is_monotonic = bool(clean_x.is_monotonic_increasing)
+    details = entry.get("diagnostics", {})
+    detector = get_text(lang, infer_signal_hint(entry["y_header"]))
+    time_range = "—" if clean_x.empty else f"{clean_x.min():.3f}–{clean_x.max():.3f} min"
+    delimiter = details.get("delimiter", "—")
+    delimiter_label = {"\t": "Tab", ",": "Comma (,)", ";": "Semicolon (;)"}.get(delimiter, delimiter)
+    return {
+        get_text(lang, "diagnostic_curve"): entry["curve_name"],
+        get_text(lang, "diagnostic_detector"): detector,
+        get_text(lang, "diagnostic_columns"): f"{entry.get('x_header', 'min')} / {entry['y_header']}",
+        get_text(lang, "diagnostic_points"): len(data),
+        get_text(lang, "diagnostic_time_range"): time_range,
+        get_text(lang, "diagnostic_skipped"): int(details.get("skipped_rows", 0)),
+        get_text(lang, "diagnostic_duplicates"): duplicate_times,
+        get_text(lang, "diagnostic_monotonic"): get_text(lang, "diagnostic_yes") if is_monotonic else get_text(lang, "diagnostic_no"),
+        get_text(lang, "diagnostic_format"): f"{entry['file_name'].rsplit('.', 1)[-1].upper()} · {details.get('encoding', '—')} · {delimiter_label}",
+    }
 
 def calculate_auto_plot_width(x_range) -> int:
     """Keep short timelines compact while capping long plots at a useful size."""
@@ -269,8 +473,11 @@ if uploaded_files or using_examples:
         global_max_x = float('-inf')
         
         files_to_parse = example_files if using_examples else uploaded_files
-        
-        for file in files_to_parse:
+        normal_signal_entries = []
+        multi_signal_entries = []
+        used_curve_names = set()
+
+        for file_index, file in enumerate(files_to_parse):
             file_name = file.name
             file_name_clean = file_name[:-4] if file_name.lower().endswith(('.csv', '.ctx')) else file_name
             
@@ -278,89 +485,211 @@ if uploaded_files or using_examples:
             if file_name_clean in st.session_state.deleted_files:
                 continue
 
+            parsed_signals = []
             if file_name.lower().endswith('.csv'):
-                df = pd.read_csv(file)
-                y_col = 'Intensity' if 'Intensity' in df.columns else df.columns[1]
+                parsed_signals = parse_csv_signals(file)
             elif file_name.lower().endswith('.ctx'):
-                content = file.getvalue().decode("utf-8")
-                lines = content.splitlines()
-                data_lines = []
-                is_data = False
-                for line in lines:
-                    if line.strip() == "[Chromatogram Data]":
-                        is_data = True
-                        continue
-                    if is_data and line.strip():
-                        parts = line.strip().split(';')
-                        if len(parts) >= 2:
-                            try:
-                                data_lines.append([float(parts[0]), float(parts[1])])
-                            except ValueError:
-                                pass
-                df = pd.DataFrame(data_lines, columns=['min', 'Intensity'])
-                y_col = 'Intensity'
-            
-            data_dict[file_name_clean] = df
-            
-            # 计算适合这个批次数据的偏移量 (y 轴数据默认在第2列)
-            clean_y = pd.to_numeric(df[y_col], errors='coerce').dropna()
+                ctx_data, ctx_diagnostics = parse_ctx_signal(file, include_diagnostics=True)
+                parsed_signals = [{
+                    "x_header": "min",
+                    "y_header": "Intensity",
+                    "data": ctx_data,
+                    "diagnostics": ctx_diagnostics,
+                }]
+
+            signal_entries = []
+            for signal_index, signal in enumerate(parsed_signals, start=1):
+                y_header = signal["y_header"] or f"Signal {signal_index}"
+                entry_id = f"{file_index}:{file_name}:{signal_index}:{y_header}"
+                default_name = file_name_clean if len(parsed_signals) == 1 else f"{file_name_clean} · {y_header}"
+                curve_name = st.session_state.curve_renames.get(entry_id, default_name).strip() or default_name
+                if curve_name in used_curve_names:
+                    suffix = 2
+                    unique_name = f"{curve_name} #{suffix}"
+                    while unique_name in used_curve_names:
+                        suffix += 1
+                        unique_name = f"{curve_name} #{suffix}"
+                    curve_name = unique_name
+                used_curve_names.add(curve_name)
+                signal_entries.append({
+                    "entry_id": entry_id,
+                    "file_name": file_name,
+                    "file_index": file_index,
+                    "signal_index": signal_index,
+                    "curve_name": curve_name,
+                    "x_header": signal.get("x_header", "min"),
+                    "y_header": y_header,
+                    "kind": infer_signal_kind(y_header),
+                    "data": signal["data"],
+                    "diagnostics": signal.get("diagnostics", {}),
+                })
+
+            if len(signal_entries) > 1:
+                multi_signal_entries.extend(signal_entries)
+            else:
+                normal_signal_entries.extend(signal_entries)
+
+        selected_entries = list(normal_signal_entries)
+        if multi_signal_entries:
+            signature = multi_signal_signature(multi_signal_entries)
+            selection_confirmed = (
+                st.session_state.get("confirmed_multi_signal_signature") == signature
+            )
+
+            if not selection_confirmed:
+                render_signal_selection_dialog(multi_signal_entries, signature)
+            else:
+                selected_ids = set(st.session_state.get("selected_multi_signal_ids", []))
+                kind_order = {"uv": 0, "ms": 1, "unknown": 2}
+                selected_multi_entries = sorted(
+                    (
+                        entry
+                        for entry in multi_signal_entries
+                        if entry["entry_id"] in selected_ids
+                    ),
+                    key=lambda entry: (
+                        kind_order[entry["kind"]],
+                        entry["file_index"],
+                        entry["signal_index"],
+                    ),
+                )
+                selected_entries.extend(selected_multi_entries)
+
+                if st.button(
+                    get_text(lang, "signal_reselect"),
+                    key=f"reselect_signals_{signature}",
+                ):
+                    st.session_state.pop("confirmed_multi_signal_signature", None)
+                    st.rerun()
+
+        active_entries = []
+        for entry in selected_entries:
+            curve_name = entry["curve_name"]
+            if curve_name in st.session_state.deleted_files:
+                continue
+            active_entries.append(entry)
+            df = entry["data"]
+            data_dict[curve_name] = df
+
+            clean_y = pd.to_numeric(df["Intensity"], errors='coerce').dropna()
             if not clean_y.empty:
                 global_min = min(global_min, clean_y.min())
                 global_max = max(global_max, clean_y.max())
-                
-            x_col = 'min' if 'min' in df.columns else df.columns[0]
-            clean_x = pd.to_numeric(df[x_col], errors='coerce').dropna()
+
+            clean_x = pd.to_numeric(df["min"], errors='coerce').dropna()
             if not clean_x.empty:
                 global_min_x = min(global_min_x, clean_x.min())
                 global_max_x = max(global_max_x, clean_x.max())
-                
+
         # 智能计算：最大峰高减去基线的跨度，加 10% 的空白间距
         if global_max > global_min:
             recommended_offset = float((global_max - global_min) * 1.1)
 
         # 维护基于用户操作的独立渲染顺序 (file_order)
         current_files = list(data_dict.keys())
-        
+
         # 1. 剔除已经被用户从上传框(或清空操作)里物理删除的文件
         st.session_state.file_order = [f for f in st.session_state.file_order if f in current_files]
-        
+
         # 2. 将新拖进来的文件追加到顺序列表末尾
         for f in current_files:
             if f not in st.session_state.file_order:
                 st.session_state.file_order.append(f)
 
-        # 渲染我们自己的自定义可排序文件列表
+        # 可拖拽排序，并将结果直接作为图中自下而上的样品顺序。
         st.markdown(get_text(lang, "imported_files"))
-        
-        for i, file_name in enumerate(st.session_state.file_order):
-            col1, col2, col3, col4, col5 = st.columns([1, 6, 1, 1, 1])
-            with col1:
-                # 简单色块标识 (提取自色板库对应的顺序)
-                from hplc_engine import PALETTES
-                colors = PALETTES.get(st.session_state.palette, PALETTES["Vibrant (For Screen)"])
-                # 因为画布引擎是对列表做 reversed() 渲染的，所以这里的颜色索引也要倒过来取才能图文一致
-                color_index = (len(st.session_state.file_order) - 1 - i) % len(colors)
-                color = colors[color_index]
-                st.markdown(f"<div style='width: 20px; height: 20px; background-color: {color}; border-radius: 3px; margin-top: 5px;'></div>", unsafe_allow_html=True)
-            with col2:
-                st.markdown(f"<div style='margin-top: 5px; font-weight: 500;'>{file_name}</div>", unsafe_allow_html=True)
-            with col3:
-                # 向上移动按钮
-                if st.button("↑", key=f"up_{file_name}", disabled=(i == 0)):
-                    st.session_state.file_order[i], st.session_state.file_order[i-1] = st.session_state.file_order[i-1], st.session_state.file_order[i]
-                    st.rerun()
-            with col4:
-                # 向下移动按钮
-                if st.button("↓", key=f"down_{file_name}", disabled=(i == len(st.session_state.file_order) - 1)):
-                    st.session_state.file_order[i], st.session_state.file_order[i+1] = st.session_state.file_order[i+1], st.session_state.file_order[i]
-                    st.rerun()
-            with col5:
-                # 单点移除按钮 (完全可控黑名单机制)
-                if st.button("🗑️", key=f"del_{file_name}", help=get_text(lang, "remove_file_help")):
-                    # 提示：直接将文件加入黑名单，防止其再次被系统尾部追加回来导致变相移动到底部
+        st.caption(get_text(lang, "drag_to_reorder"))
+        order_signature = hashlib.sha1("|".join(sorted(current_files)).encode("utf-8")).hexdigest()[:10]
+        sorted_files = sort_items(
+            st.session_state.file_order,
+            direction="vertical",
+            key=f"curve_order_{st.session_state.uploader_key}_{order_signature}",
+            custom_style="""
+                .sortable-component { gap: 8px; }
+                .sortable-item,
+                .sortable-item:hover,
+                .sortable-item:focus,
+                .sortable-item:active,
+                .sortable-item.dragging {
+                    box-sizing: border-box !important;
+                    height: auto !important;
+                    min-height: 46px !important;
+                    margin: 5px !important;
+                    padding: 10px 14px !important;
+                    border: 1px solid #d8dee9;
+                    border-radius: 8px;
+                    cursor: grab;
+                    font-size: 16px;
+                    font-weight: 500;
+                    line-height: 24px !important;
+                    text-align: left;
+                }
+                .sortable-item {
+                    background: #ffffff !important;
+                    color: #2f3440 !important;
+                }
+                .sortable-item:hover,
+                .sortable-item:focus,
+                .sortable-item:active,
+                .sortable-item.dragging {
+                    background: #ff4b4b !important;
+                    color: #ffffff !important;
+                    border-color: #ff4b4b !important;
+                }
+                .sortable-item.active,
+                .active {
+                    opacity: 1 !important;
+                }
+            """,
+        )
+        if sorted_files and sorted_files != st.session_state.file_order:
+            st.session_state.file_order = sorted_files
+
+        entries_by_name = {entry["curve_name"]: entry for entry in active_entries}
+        with st.expander(get_text(lang, "manage_curves")):
+            for file_name in list(st.session_state.file_order):
+                entry = entries_by_name.get(file_name)
+                if entry is None:
+                    continue
+                name_col, delete_col = st.columns([8, 1])
+                widget_digest = hashlib.sha1(entry["entry_id"].encode("utf-8")).hexdigest()[:10]
+                with name_col:
+                    new_name = st.text_input(
+                        get_text(lang, "curve_name_label"),
+                        value=file_name,
+                        key=f"curve_name_{st.session_state.uploader_key}_{widget_digest}",
+                        label_visibility="collapsed",
+                    ).strip()
+                with delete_col:
+                    delete_clicked = st.button(
+                        "🗑️",
+                        key=f"del_{widget_digest}",
+                        help=get_text(lang, "remove_file_help"),
+                    )
+
+                if delete_clicked:
                     st.session_state.deleted_files.add(file_name)
-                    st.session_state.file_order.pop(i)
+                    st.session_state.file_order.remove(file_name)
                     st.rerun()
+
+                if new_name and new_name != file_name:
+                    if new_name in current_files:
+                        st.warning(get_text(lang, "curve_name_duplicate", new_name))
+                    else:
+                        st.session_state.curve_renames[entry["entry_id"]] = new_name
+                        st.session_state.file_order = [new_name if name == file_name else name for name in st.session_state.file_order]
+                        for region in st.session_state.get("colored_regions", []):
+                            if isinstance(region, dict) and region.get("target_file") == file_name:
+                                region["target_file"] = new_name
+                        st.rerun()
+
+        with st.expander(get_text(lang, "diagnostic_title")):
+            st.caption(get_text(lang, "diagnostic_intro"))
+            st.dataframe(
+                pd.DataFrame(signal_diagnostic_row(entry) for entry in active_entries),
+                hide_index=True,
+                use_container_width=True,
+            )
             
     except Exception as e:
         st.error(get_text(lang, "parse_error", str(e)))
@@ -600,6 +929,17 @@ with st.sidebar:
                 if st.button(get_text(lang, "delete_btn"), key=f"del_color_{i}"):
                     st.session_state.colored_regions.pop(i)
                     st.rerun()
+
+    if os.environ.get("HPLC_PORTABLE_MODE") == "1":
+        st.markdown("---")
+        if st.button(
+            get_text(lang, "exit_app_btn"),
+            help=get_text(lang, "exit_app_help"),
+            use_container_width=True,
+        ):
+            st.success(get_text(lang, "exit_app_closing"))
+            schedule_portable_exit()
+            st.stop()
 
 # 5. 开始绘制图表
 if data_dict:

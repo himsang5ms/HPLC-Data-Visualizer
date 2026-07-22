@@ -1,3 +1,4 @@
 streamlit
 pandas
 plotly
+streamlit-sortables==0.3.1

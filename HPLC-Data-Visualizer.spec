@@ -4,14 +4,17 @@ from PyInstaller.utils.hooks import collect_all, copy_metadata
 
 
 streamlit_data, streamlit_binaries, streamlit_hidden_imports = collect_all("streamlit")
+sortables_data, sortables_binaries, sortables_hidden_imports = collect_all("streamlit_sortables")
 
 analysis = Analysis(
     ["portable_launcher.py"],
     pathex=[],
-    binaries=streamlit_binaries,
+    binaries=streamlit_binaries + sortables_binaries,
     datas=(
         streamlit_data
+        + sortables_data
         + copy_metadata("streamlit")
+        + copy_metadata("streamlit-sortables")
         + [
             ("web_app.py", "."),
             ("examples", "examples"),
@@ -20,7 +23,7 @@ analysis = Analysis(
             (".streamlit/config.toml", ".streamlit"),
         ]
     ),
-    hiddenimports=streamlit_hidden_imports + ["hplc_engine", "lang"],
+    hiddenimports=streamlit_hidden_imports + sortables_hidden_imports + ["hplc_engine", "lang"],
     hookspath=[],
     hooksconfig={},
     runtime_hooks=[],

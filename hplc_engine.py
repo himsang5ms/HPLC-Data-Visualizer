@@ -1,7 +1,10 @@
 import pandas as pd
 import plotly.graph_objects as go
+import csv
 import itertools
+import io
 import math
+from pathlib import Path
 import unicodedata
 
 # --- 预设的顶刊/高级配色方案 ---
@@ -11,6 +14,108 @@ PALETTES = {
     "Grayscale Cascade": ["#111111", "#444444", "#777777", "#AAAAAA", "#DDDDDD"],
     "Vibrant (For Screen)": ["#1f77b4", "#ff7f0e", "#2ca02c", "#d62728", "#9467bd", "#8c564b", "#e377c2"]
 }
+
+
+def parse_csv_signals(source) -> list[dict]:
+    """Parse one or more two-column chromatograms stored sequentially in a CSV."""
+    if isinstance(source, (str, Path)):
+        raw = Path(source).read_bytes()
+    elif isinstance(source, bytes):
+        raw = source
+    elif hasattr(source, "getvalue"):
+        raw = source.getvalue()
+    else:
+        raw = source.read()
+
+    if isinstance(raw, str):
+        text = raw
+        raw = raw.encode("utf-8")
+        detected_encoding = "utf-8"
+    else:
+        text = None
+        detected_encoding = "utf-8"
+        for encoding in ("utf-8-sig", "utf-16", "gb18030"):
+            try:
+                text = raw.decode(encoding)
+                detected_encoding = encoding
+                break
+            except (UnicodeDecodeError, UnicodeError):
+                continue
+        if text is None:
+            text = raw.decode("utf-8", errors="replace")
+
+    sample = "\n".join(line for line in text.splitlines()[:30] if line.strip())
+    try:
+        delimiter = csv.Sniffer().sniff(sample, delimiters=",;\t").delimiter
+    except csv.Error:
+        delimiter = ","
+    rows = list(csv.reader(io.StringIO(text), delimiter=delimiter))
+
+    def numeric_pair(row):
+        if len(row) < 2:
+            return None
+        try:
+            return float(row[0].strip()), float(row[1].strip())
+        except (TypeError, ValueError):
+            return None
+
+    header_indexes = []
+    for index, row in enumerate(rows):
+        if len(row) < 2 or not row[0].strip() or not row[1].strip():
+            continue
+        if numeric_pair(row) is not None:
+            continue
+        next_index = index + 1
+        while next_index < len(rows) and not any(cell.strip() for cell in rows[next_index]):
+            next_index += 1
+        if next_index < len(rows) and numeric_pair(rows[next_index]) is not None:
+            header_indexes.append(index)
+
+    signals = []
+    for position, header_index in enumerate(header_indexes):
+        end_index = header_indexes[position + 1] if position + 1 < len(header_indexes) else len(rows)
+        block_rows = [row for row in rows[header_index + 1:end_index] if any(cell.strip() for cell in row)]
+        points = [pair for row in block_rows if (pair := numeric_pair(row)) is not None]
+        if not points:
+            continue
+        x_header = rows[header_index][0].strip()
+        y_header = rows[header_index][1].strip()
+        signals.append({
+            "x_header": x_header,
+            "y_header": y_header,
+            "data": pd.DataFrame(points, columns=["min", "Intensity"]),
+            "diagnostics": {
+                "encoding": detected_encoding,
+                "delimiter": delimiter,
+                "skipped_rows": len(block_rows) - len(points),
+            },
+        })
+
+    if signals:
+        return signals
+
+    # Preserve support for ordinary CSV files whose headers are not followed
+    # immediately by a numeric row.
+    fallback = pd.read_csv(io.StringIO(text), sep=delimiter)
+    if fallback.shape[1] < 2:
+        raise ValueError("CSV must contain at least two columns")
+    x_header, y_header = str(fallback.columns[0]), str(fallback.columns[1])
+    clean = pd.DataFrame({
+        "min": pd.to_numeric(fallback.iloc[:, 0], errors="coerce"),
+        "Intensity": pd.to_numeric(fallback.iloc[:, 1], errors="coerce"),
+    }).dropna()
+    if clean.empty:
+        raise ValueError("No numeric chromatogram points were found")
+    return [{
+        "x_header": x_header,
+        "y_header": y_header,
+        "data": clean,
+        "diagnostics": {
+            "encoding": detected_encoding,
+            "delimiter": delimiter,
+            "skipped_rows": max(0, len(fallback) - len(clean)),
+        },
+    }]
 
 
 def estimate_sample_label_margin(
@@ -76,8 +181,9 @@ def generate_plot(
         y_col = 'Intensity' if 'Intensity' in df.columns else df.columns[1]
 
         # 核心改动：移除写死的 24，尊重真实数据的右边界
-        current_x_max = df[x_col].max()
-        global_x_max = max(global_x_max, current_x_max)
+        clean_x = pd.to_numeric(df[x_col], errors='coerce')
+        if clean_x.notna().any():
+            global_x_max = max(global_x_max, clean_x.max())
 
         # 核心逻辑：计算并应用 Y 轴偏移量 (Waterfall effect)
         # 强制转换为数值类型，防止仪器导出的烂格式带了字符串导致 + 报错而被拦截
@@ -89,7 +195,7 @@ def generate_plot(
         
         # 添加此条曲线到画布 (重新启用 WebGL 硬件加速，解决几十万数据点的渲染卡顿)
         fig.add_trace(go.Scattergl(
-            x=df[x_col], 
+            x=clean_x,
             y=y_data,
             mode='lines+markers',
             marker=dict(size=6, opacity=0),  # 透明的散点，用于捕获用户的点击事件
